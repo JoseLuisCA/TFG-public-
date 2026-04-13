@@ -1,6 +1,8 @@
-from PySide6.QtGui import QDrag, QFont
+from pathlib import Path
+
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import (
-    QApplication,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -10,11 +12,27 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from PySide6.QtCore import Qt
+
+from canvas.workspace_canvas import WorkspaceCanvas
+from widgets.draggable_tool_button import DraggableToolButton
 
 
-#Aquí definimos la página de la aplicación.
+ICONS_DIR = Path(__file__).resolve().parents[1] / "icons"
+
+
 class MainWindow(QMainWindow):
+    _tool_button_style = (
+        "font-size: 24px;"
+        "background-color: white;"
+        "border: 1px solid #d1d5db;"
+        "border-radius: 10px;"
+    )
+    _active_tool_button_style = (
+        "font-size: 24px;"
+        "background-color: #e5e7eb;"
+        "border: 1px solid #9ca3af;"
+        "border-radius: 10px;"
+    )
 
     def __init__(self):
         super().__init__()
@@ -31,7 +49,6 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.fa_page)
         self.stack.setCurrentWidget(self.home_page)
 
-    #Página principal
     def _build_home_page(self) -> QWidget:
         container = QWidget()
         main_layout = QVBoxLayout(container)
@@ -50,9 +67,9 @@ class MainWindow(QMainWindow):
         buttons_layout = QVBoxLayout(buttons)
         buttons_layout.setSpacing(16)
 
-        button1 = QPushButton('Finite Automaton')
-        button2 = QPushButton('Stack Automaton')
-        button3 = QPushButton('Exit')
+        button1 = QPushButton("Finite Automaton")
+        button2 = QPushButton("Stack Automaton")
+        button3 = QPushButton("Exit")
 
         for button in (button1, button2, button3):
             button.setMinimumHeight(64)
@@ -75,7 +92,6 @@ class MainWindow(QMainWindow):
 
         return container
 
-    #Página de autómatas finitos
     def _build_fa_page(self) -> QWidget:
         page = QWidget()
         page_layout = QHBoxLayout(page)
@@ -89,20 +105,34 @@ class MainWindow(QMainWindow):
         tool_layout.setContentsMargins(12, 12, 12, 12)
         tool_layout.setSpacing(12)
 
-        mouse_button = QPushButton("🖱")
-        circle_button = QPushButton("○")
-        arrow_button = QPushButton("➜")
+        mouse_button = QPushButton()
+        mouse_button.setIcon(QIcon(str(ICONS_DIR / "hand.png")))
+        mouse_button.setIconSize(QSize(32, 32))
+        circle_button = DraggableToolButton("", "circle")
+        circle_button.setIcon(QIcon(str(ICONS_DIR / "state.png")))
+        circle_button.setIconSize(QSize(32, 32))
+        arrow_button = QPushButton()
+        arrow_button.setIcon(QIcon(str(ICONS_DIR / "curved-arrow.png")))
+        arrow_button.setIconSize(QSize(32, 32))
+        delete_button = QPushButton("X")
         back_button = QPushButton("Back")
 
-        for tool_button in (mouse_button, circle_button, arrow_button):
+        mouse_button.clicked.connect(
+            lambda: self._set_active_tool_button(mouse_button, [arrow_button, delete_button])
+        )
+        arrow_button.clicked.connect(
+            lambda: self._set_active_tool_button(arrow_button, [mouse_button, delete_button])
+        )
+        delete_button.clicked.connect(
+            lambda: self._set_active_tool_button(delete_button, [mouse_button, arrow_button])
+        )
+
+        for tool_button in (mouse_button, circle_button, arrow_button, delete_button):
             tool_button.setMinimumHeight(56)
-            tool_button.setStyleSheet(
-                "font-size: 24px;"
-                "background-color: white;"
-                "border: 1px solid #d1d5db;"
-                "border-radius: 10px;"
-            )
+            tool_button.setStyleSheet(self._tool_button_style)
             tool_layout.addWidget(tool_button)
+
+        self._set_active_tool_button(mouse_button, [arrow_button, delete_button])
 
         tool_layout.addStretch(1)
 
@@ -117,16 +147,17 @@ class MainWindow(QMainWindow):
         back_button.clicked.connect(lambda: self.stack.setCurrentWidget(self.home_page))
         tool_layout.addWidget(back_button)
 
-        workspace = QWidget()
+        workspace = WorkspaceCanvas()
+        mouse_button.clicked.connect(lambda: workspace.set_active_tool("hand"))
+        arrow_button.clicked.connect(lambda: workspace.set_active_tool("arrow"))
+        delete_button.clicked.connect(lambda: workspace.set_active_tool("delete"))
 
         page_layout.addWidget(tool_menu)
         page_layout.addWidget(workspace, 1)
 
         return page
 
-
-app = QApplication()
-window = MainWindow()
-window.show()
-
-app.exec()
+    def _set_active_tool_button(self, active_button: QPushButton, inactive_buttons: list[QPushButton]) -> None:
+        active_button.setStyleSheet(self._active_tool_button_style)
+        for button in inactive_buttons:
+            button.setStyleSheet(self._tool_button_style)
